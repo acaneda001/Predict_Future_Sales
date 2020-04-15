@@ -3,6 +3,11 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 
+from sklearn.metrics import mean_absolute_error
+from sklearn.ensemble import RandomForestRegressor
+from xgboost import XGBRegressor
+from xgboost import plot_importance
+
 plt.style.use('ggplot')
 
 df_train = pd.read_csv('input/sales_train.csv')
@@ -77,6 +82,35 @@ df_train.date = pd.to_datetime(df_train.date)
 
 df_train_pivot = pd.pivot_table(df_train, values=['item_cnt_day'], index=['shop_id', 'item_id'],
                                 columns=['date_block_num'],
-                                aggfunc=sum).fillna(0).reset_index()
+                                aggfunc=sum).fillna(0)
 
-df_train_pivot = df_train_pivot.merge()
+df_train_pivot.columns = [col[1] for col in df_train_pivot.columns]
+df_train_pivot = df_train_pivot.reset_index()
+# add later item_category_id
+
+df_test = pd.merge(df_test, df_train_pivot, on=['item_id', 'shop_id'], how='left').fillna(0)
+X_valid = df_test.drop(columns=["ID", 0, 33]).to_numpy()
+y_valid = df_test[33].to_numpy()
+
+X_train = df_test.drop(columns=["ID", 32, 33]).to_numpy()
+y_train = df_test[32].to_numpy()
+X_test = df_test.drop(columns=["ID", 0, 1]).to_numpy()
+
+
+# model
+model = XGBRegressor(random_state=0)
+
+# Preprocessing of training data, fit model
+model.fit(X_train, y_train)
+# Preprocessing of validation data, get predictions
+preds = model.predict(X_valid)
+preds = pd.DataFrame(preds)
+preds.to_csv("output/prediction.csv")
+# Evaluate the model
+score = mean_absolute_error(y_valid, preds)
+print('RMAE:', np.sqrt(score))
+
+fig, ax = plt.subplots(1,1)
+plot_importance(booster=model, ax=ax)
+plt.show()
+
